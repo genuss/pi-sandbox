@@ -238,7 +238,8 @@ function matchesPattern(filePath: string, patterns: string[]): boolean {
       const escaped = absP.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
       return new RegExp(`^${escaped}$`).test(abs);
     }
-    return abs === absP || abs.startsWith(absP + "/");
+    const sep = absP.endsWith("/") ? "" : "/";
+    return abs === absP || abs.startsWith(absP + sep);
   });
 }
 
