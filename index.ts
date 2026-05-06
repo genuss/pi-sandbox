@@ -80,7 +80,9 @@ import {
   type BashOperations,
   createBashToolDefinition,
   getAgentDir,
+  getShellConfig,
   isToolCallEventType,
+  SettingsManager,
 } from "@mariozechner/pi-coding-agent";
 import { matchesKey, Key, truncateToWidth } from "@mariozechner/pi-tui";
 
@@ -339,7 +341,7 @@ function addWritePathToConfig(configPath: string, pathToAdd: string): void {
 
 // ── Sandboxed bash ops ────────────────────────────────────────────────────────
 
-function createSandboxedBashOps(): BashOperations {
+function createSandboxedBashOps(shellPath?: string): BashOperations {
   return {
     async exec(command, cwd, { onData, signal, timeout, env }) {
       if (!existsSync(cwd)) {
@@ -347,9 +349,10 @@ function createSandboxedBashOps(): BashOperations {
       }
 
       const wrappedCommand = await SandboxManager.wrapWithSandbox(command);
+      const { shell, args } = getShellConfig(shellPath);
 
       return new Promise((resolve, reject) => {
-        const child = spawn("bash", ["-c", wrappedCommand], {
+        const child = spawn(shell, [...args, wrappedCommand], {
           cwd,
           env,
           detached: true,
@@ -419,7 +422,8 @@ export default function (pi: ExtensionAPI) {
   });
 
   const localCwd = process.cwd();
-  const localBash = createBashToolDefinition(localCwd);
+  const userShellPath = SettingsManager.create(localCwd).getShellPath();
+  const localBash = createBashToolDefinition(localCwd, { shellPath: userShellPath });
 
   let sandboxEnabled = false;
   let sandboxInitialized = false;
@@ -713,7 +717,8 @@ export default function (pi: ExtensionAPI) {
           return localBash.execute(id, params, signal, onUpdate, ctx);
         }
         const sandboxedBash = createBashToolDefinition(localCwd, {
-          operations: createSandboxedBashOps(),
+          operations: createSandboxedBashOps(userShellPath),
+          shellPath: userShellPath,
         });
         return sandboxedBash.execute(id, params, signal, onUpdate, ctx);
       };
@@ -804,7 +809,7 @@ export default function (pi: ExtensionAPI) {
       }
     }
 
-    return { operations: createSandboxedBashOps() };
+    return { operations: createSandboxedBashOps(userShellPath) };
   });
 
   // ── tool_call — network pre-check for bash, path policy for read/write/edit
